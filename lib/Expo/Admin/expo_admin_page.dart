@@ -102,26 +102,60 @@ class _ExpoAdminPageState extends State<ExpoAdminPage> {
   }
 
   Future<void> _confirmDeleteExhibition(Exhibition ex) async {
+    final pwdController = TextEditingController();
+    String? errorMsg;
+
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Exhibition?'),
-        content: Text(
-          'Are you sure you want to delete "${ex.name}"? All associated orders will also be deleted.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          title: const Text('Delete Exhibition?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to delete "${ex.name}"? All associated orders will also be deleted.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: pwdController,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Enter Password',
+                  errorText: errorMsg,
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (pwdController.text.trim() != '3300') {
+                  setDlgState(() => errorMsg = 'Incorrect password');
+                  return;
+                }
+                Navigator.of(ctx).pop(true);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child:
+                  const Text('Delete', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
+
+    Future.delayed(const Duration(milliseconds: 350), pwdController.dispose);
 
     if (confirmed == true && mounted) {
       try {

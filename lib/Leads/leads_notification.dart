@@ -259,7 +259,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
             time: ts,
           ));
         }
-      } else if (role == 'core_team') {
+      } else if (role == 'admin') {
         // Fetch completed tasks assigned by this core team member
         final snapshot = await FirebaseFirestore.instance
             .collection('core_tasks')
@@ -417,7 +417,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
       await userCache.ensureLoaded();
       final role = userCache.role;
 
-      if (role == 'core_team') {
+      if (role == 'admin') {
         // Mark task completion notification as seen for Core Team member
         if (uid != null) {
           try {

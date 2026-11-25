@@ -618,11 +618,10 @@ class _HomePageState extends State<HomePage>
               TodoWarningBanner(onTap: _handleTodoWarningTap),
             // Page scroll indicator dots shown only for roles with multiple pages
             if (_role != 'supersale_admin' &&
-                _role != 'core_team' &&
                 _role != 'sme' &&
                 _role != 'dme_admin' &&
                 _role != 'dme_user' &&
-                _role != 'expo_user' &&
+                _role != 'expo_sales' &&
                 _role != 'expo_acc')
               Positioned(
                 bottom: _showTodoWarning ? 54 : 16,

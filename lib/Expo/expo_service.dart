@@ -45,6 +45,9 @@ class Exhibition {
   final bool isManuallyEnded;
   final DateTime? endedAt;
   final double minCouponAmount;
+  final int couponSerialMin;
+  final int couponSerialMax;
+  final int couponSerialDigits;
   final DateTime createdAt;
   final String createdBy;
   final String createdByName;
@@ -60,6 +63,9 @@ class Exhibition {
     this.isManuallyEnded = false,
     this.endedAt,
     this.minCouponAmount = 10000.0,
+    this.couponSerialMin = 1,
+    this.couponSerialMax = 4000,
+    this.couponSerialDigits = 4,
     required this.createdAt,
     required this.createdBy,
     required this.createdByName,
@@ -92,6 +98,9 @@ class Exhibition {
       'selected_user_ids': selectedUserIds,
       'selected_users': selectedUsers,
       'min_coupon_amount': minCouponAmount,
+      'coupon_serial_min': couponSerialMin,
+      'coupon_serial_max': couponSerialMax,
+      'coupon_serial_digits': couponSerialDigits,
       'created_at': _ts(createdAt),
       'created_by': createdBy,
       'created_by_name': createdByName,
@@ -126,6 +135,9 @@ class Exhibition {
     final DateTime? endedAtVal =
         _parseNullableDate(data['ended_at']) ?? metaEndedAt;
     final parsedMinCoupon = _toDouble(data['min_coupon_amount']);
+    final parsedSerialMin = _toInt(data['coupon_serial_min']);
+    final parsedSerialMax = _toInt(data['coupon_serial_max']);
+    final parsedSerialDigits = _toInt(data['coupon_serial_digits']);
 
     return Exhibition(
       id: (data['id'] ?? '').toString(),
@@ -138,6 +150,9 @@ class Exhibition {
       isManuallyEnded: manuallyEnded,
       endedAt: endedAtVal,
       minCouponAmount: parsedMinCoupon > 0 ? parsedMinCoupon : 10000.0,
+      couponSerialMin: parsedSerialMin > 0 ? parsedSerialMin : 1,
+      couponSerialMax: parsedSerialMax > 0 ? parsedSerialMax : 4000,
+      couponSerialDigits: parsedSerialDigits >= 3 ? parsedSerialDigits : 4,
       createdAt: _parseDate(data['created_at']),
       createdBy: data['created_by'] ?? '',
       createdByName: data['created_by_name'] ?? '',
@@ -769,6 +784,9 @@ class ExpoService {
     required String location,
     required List<Map<String, dynamic>> selectedUsers,
     double minCouponAmount = 10000.0,
+    int couponSerialMin = 1,
+    int couponSerialMax = 4000,
+    int couponSerialDigits = 4,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     final cache = UserCacheService.instance;
@@ -810,6 +828,9 @@ class ExpoService {
       'selected_user_ids': userIds,
       'selected_users': usersToSave,
       'min_coupon_amount': minCouponAmount > 0 ? minCouponAmount : 10000.0,
+      'coupon_serial_min': couponSerialMin > 0 ? couponSerialMin : 1,
+      'coupon_serial_max': couponSerialMax > 0 ? couponSerialMax : 4000,
+      'coupon_serial_digits': couponSerialDigits >= 3 ? couponSerialDigits : 4,
     };
 
     if (id == null || id.isEmpty) {

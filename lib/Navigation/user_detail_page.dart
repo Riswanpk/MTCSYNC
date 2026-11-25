@@ -21,7 +21,7 @@ class UserDetailPage extends StatefulWidget {
 class _UserDetailPageState extends State<UserDetailPage> {
   static const Color _primaryBlue = Color(0xFF005BAC);
 
-  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user', 'supersale_admin', 'core_team', 'expo_user', 'expo_acc', 'expo_acc_main', 'accounts', 'expo_coupon'];
+  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user', 'supersale_admin', 'expo_sales', 'expo_acc', 'expo_acc_main', 'accounts', 'expo_coupon'];
   final List<String> _branches = [
     'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'EXPO', 'JBL', 'KKM', 'KSD',
     'KTM', 'PKD', 'PKT', 'PMN', 'TRR', 'TSR', 'TLY', 'TVM',
@@ -291,10 +291,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
             _infoRow(
               Icons.security,
               'Current Role',
-              role == 'core_team'
-                  ? 'Core Team'
-                  : role == 'asst_manager'
-                      ? 'Asst Manager'
+              role == 'asst_manager'
+                  ? 'Asst Manager'
                       : role == 'sync_head'
                           ? 'Sync Head'
                           : role == 'dme_admin'
@@ -303,7 +301,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                   ? 'DME User'
                                   : role == 'supersale_admin'
                                       ? 'Supersale Admin'
-                                      : role == 'expo_user'
+                                      : role == 'expo_sales'
                                           ? 'Expo User'
                                           : role == 'expo_acc'
                                               ? 'Expo Accounts'
@@ -321,11 +319,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
                           ? Colors.deepOrange
                           : role == 'sync_head'
                               ? Colors.blue
-                              : role == 'core_team'
-                                  ? Colors.pink
-                                  : role == 'expo_acc'
+                              : role == 'expo_acc'
                                       ? const Color(0xFF7C3AED)
-                                      : role == 'expo_user'
+                                      : role == 'expo_sales'
                                           ? const Color(0xFF005BAC)
                                           : role == 'accounts'
                                               ? const Color(0xFF00897B)
@@ -542,9 +538,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                           ? Icons.manage_accounts
                                           : r == 'sync_head'
                                               ? Icons.hub
-                                              : r == 'core_team'
-                                                  ? Icons.group_work_rounded
-                                                  : Icons.person,
+                                              : Icons.person,
                               color: r == 'admin'
                                   ? Colors.deepPurple
                                   : r == 'manager'
@@ -553,16 +547,12 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                           ? Colors.deepOrange
                                           : r == 'sync_head'
                                               ? Colors.blue
-                                              : r == 'core_team'
-                                                  ? Colors.pink
-                                                  : Colors.green,
+                                              : Colors.green,
                               size: 20,
                             ),
                             const SizedBox(width: 10),
-                            Text(r == 'core_team'
-                                ? 'Core Team'
-                                : r == 'asst_manager'
-                                    ? 'Asst Manager'
+                            Text(r == 'asst_manager'
+                                ? 'Asst Manager'
                                     : r == 'sync_head'
                                         ? 'Sync Head'
                                         : r == 'dme_admin'
@@ -571,7 +561,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                                 ? 'DME User'
                                                 : r == 'supersale_admin'
                                                     ? 'Supersale Admin'
-                                                    : r == 'expo_user'
+                                                    : r == 'expo_sales'
                                                         ? 'Expo User'
                                                         : r == 'expo_acc'
                                                             ? 'Expo Accounts'

@@ -501,7 +501,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Widget build(BuildContext context) {
     final role = widget.role;
 
-    if (role == 'expo_user' || role == 'expo_acc' || role == 'expo_acc_main') {
+    if (role == 'expo_sales' || role == 'expo_acc' || role == 'expo_acc_main') {
       return _buildExpoRoleTiles(context, role ?? '');
     }
     if (role?.toLowerCase() == 'accounts') {
@@ -512,9 +512,6 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
     if (role == 'supersale_admin') {
       return _buildSupersaleAdminTiles(context);
-    }
-    if (role == 'core_team') {
-      return _buildCoreTeamTiles(context);
     }
     if (role == 'sme' || role == 'dme_user') {
       return _buildOriginalHomePage(context);
@@ -578,16 +575,37 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   }
 
   Widget _buildExpoRoleTiles(BuildContext context, String role) {
-    final isAcc = role == 'expo_acc' || role == 'expo_acc_main';
+    final isAcc = role == 'expo_acc';
     final isAccMain = role == 'expo_acc_main';
     final List<Widget> buttons = [
-      NeumorphicButton(
-        onTap: () => _navigateToExpo(context),
-        text: 'Expo',
-        color: primaryBlue,
-        textColor: Colors.white,
-        icon: isAcc ? Icons.verified_user_rounded : Icons.storefront_rounded,
-      ),
+      if (!isAcc)
+        NeumorphicButton(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ExpoUserMainPage(),
+              ),
+            );
+          },
+          text: 'Expo',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.storefront_rounded,
+        ),
+      if (isAcc || isAccMain)
+        NeumorphicButton(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ExpoAccountsPage(),
+              ),
+            );
+          },
+          text: 'Verification',
+          color: isAcc ? primaryBlue : primaryGreen,
+          textColor: Colors.white,
+          icon: Icons.verified_user_rounded,
+        ),
       if (isAccMain)
         NeumorphicButton(
           onTap: () {
@@ -598,7 +616,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             );
           },
           text: 'Dashboard',
-          color: primaryGreen,
+          color: primaryBlue,
           textColor: Colors.white,
           icon: Icons.dashboard_rounded,
         ),
@@ -612,7 +630,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             );
           },
           text: "Today's Collection",
-          color: primaryBlue,
+          color: primaryGreen,
           textColor: Colors.white,
           icon: Icons.account_balance_wallet_rounded,
         ),
@@ -630,9 +648,9 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             ),
           );
         },
-        text: 'EXPO Orders',
-        color: primaryBlue,
-        textColor: Colors.white,
+        text: 'Orders',
+        color: Colors.white,
+        textColor: primaryBlue,
         icon: Icons.receipt_long_rounded,
       ),
     ];
@@ -742,14 +760,6 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           textColor: Colors.white,
           icon: Icons.campaign_rounded,
         ),
-      if (role == 'sales' || role == 'admin' || role == 'manager' || role == 'asst_manager')
-        NeumorphicButton(
-          onTap: () => _navigateToOrders(context),
-          text: 'Orders',
-          color: primaryGreen,
-          textColor: Colors.white,
-          icon: Icons.inventory_2_rounded,
-        ),
       if (role == 'sync_head')
         NeumorphicButton(
           onTap: () => _navigateToTodo(context),
@@ -832,17 +842,17 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       if (role == 'sales')
         NeumorphicButton(
           onTap: () => _navigateToExpoAssignedOrders(context),
-          text: 'EXPO Orders',
-          color: primaryBlue,
-          textColor: Colors.white,
+          text: 'Orders',
+          color: Colors.white,
+          textColor: primaryBlue,
           icon: Icons.local_shipping_rounded,
         ),
       if (role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
           onTap: () => _navigateToExpoAssignedOrders(context),
-          text: 'EXPO Orders',
-          color: primaryGreen,
-          textColor: Colors.white,
+          text: 'Orders',
+          color: Colors.white,
+          textColor: primaryBlue,
           icon: Icons.local_shipping_rounded,
         ),
       // Approvals button on 2nd page for dme_admin
@@ -1299,7 +1309,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (!context.mounted) return;
     final role = cache.role;
 
-    if (role == 'admin' || role == 'core_team') {
+    if (role == 'admin') {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const CoreTeamTaskPage(),

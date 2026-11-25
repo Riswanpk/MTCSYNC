@@ -23,6 +23,21 @@ class _RegisterPageState extends State<RegisterPage>
   final _passwordController = TextEditingController();
   final _codeController = TextEditingController();
   String? _selectedBranch;
+  String _selectedRole = 'sales';
+
+  static const List<String> _availableRoles = [
+    'sales',
+    'manager',
+    'asst_manager',
+    'sync_head',
+    'sme',
+    'supersale_admin',
+    'expo_sales',
+    'expo_acc',
+    'expo_acc_main',
+    'accounts',
+    'expo_coupon',
+  ];
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -109,7 +124,7 @@ class _RegisterPageState extends State<RegisterPage>
           .set({
         'email': _emailController.text.trim(),
         'username': _usernameController.text.trim().toUpperCase(),
-        'role': 'sales',
+        'role': _selectedRole,
         'branch': _selectedBranch,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -427,6 +442,38 @@ class _RegisterPageState extends State<RegisterPage>
                                   validator: (value) => value == null
                                       ? 'Please select a branch'
                                       : null,
+                                ),
+                                const SizedBox(height: 14),
+
+                                // Role dropdown
+                                DropdownButtonFormField<String>(
+                                  initialValue: _selectedRole,
+                                  decoration: _inputDecoration(
+                                      'Role', Icons.badge_outlined),
+                                  dropdownColor: isDark
+                                      ? const Color(0xFF1A2332)
+                                      : Colors.white,
+                                  style: TextStyle(
+                                    color:
+                                        isDark ? Colors.white : Colors.black87,
+                                    fontFamily: 'Montserrat',
+                                    fontSize: 14,
+                                  ),
+                                  items: _availableRoles
+                                      .map((role) => DropdownMenuItem(
+                                            value: role,
+                                            child: Text(role
+                                                .replaceAll('_', ' ')
+                                                .toUpperCase()),
+                                          ))
+                                      .toList(),
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        _selectedRole = value;
+                                      });
+                                    }
+                                  },
                                 ),
                                 const SizedBox(height: 14),
 

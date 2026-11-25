@@ -30,7 +30,6 @@ class _InstructionsPageState extends State<InstructionsPage> {
     {'label': 'DME User', 'value': 'dme_user'},
     {'label': 'DME Admin', 'value': 'dme_admin'},
     {'label': 'Supersale Admin', 'value': 'supersale_admin'},
-    {'label': 'Core Team', 'value': 'core_team'},
   ];
 
   @override

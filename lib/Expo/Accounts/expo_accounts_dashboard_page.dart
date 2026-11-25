@@ -786,36 +786,7 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
   }) {
     return Column(
       children: [
-        // Row 1: Total Amount (Blue) & Total Today (Green)
-        Row(
-          children: [
-            Expanded(
-              child: _KpiMetricCard(
-                title: 'Total Amount',
-                value: _formatMoney(totalAmount),
-                subtitle: 'Overall Order Value',
-                icon: Icons.currency_rupee_rounded,
-                accentColor: primaryBlue,
-                isHighlight: true,
-                isDark: isDark,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _KpiMetricCard(
-                title: 'Total Today',
-                value: _formatMoney(totalToday),
-                subtitle: "Today's Order Value",
-                icon: Icons.today_rounded,
-                accentColor: primaryGreen,
-                isHighlight: true,
-                isDark: isDark,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Row 2: Total Advance (Blue) & Total Advance Today (Green)
+        // Row 1: Total Advance (Blue) & Total Advance Today (Green)
         Row(
           children: [
             Expanded(

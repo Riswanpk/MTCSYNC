@@ -285,7 +285,7 @@ Future<void> _initializeNotifications() async {
     NotificationChannel(
       channelKey: 'notice_channel',
       channelName: 'Notice Notifications',
-      channelDescription: 'Channel for read-only notices from Core Team',
+      channelDescription: 'Channel for read-only notices from Admin',
       defaultColor: const Color(0xFF005BAC),
       ledColor: Colors.blue,
       soundSource: 'resource://raw/notice',

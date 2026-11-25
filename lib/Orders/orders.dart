@@ -66,7 +66,7 @@ class _OrdersPageState extends State<OrdersPage> {
 
     setState(() {
       if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') {
-        selectedBranch = selectedBranch;
+        selectedBranch ??= 'ALL';
       } else {
         selectedBranch = branch;
         selectedUser = uid;
@@ -74,7 +74,9 @@ class _OrdersPageState extends State<OrdersPage> {
       selectedStatus = 'In Progress';
     });
 
-    if (role == 'manager' || role == 'asst_manager') {
+    if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') {
+      await _fetchUsers(selectedBranch);
+    } else if (role == 'manager' || role == 'asst_manager') {
       await _fetchUsers(branch, uid);
     }
 
@@ -91,7 +93,7 @@ class _OrdersPageState extends State<OrdersPage> {
 
   Future<void> _fetchUsers([String? branch, String? ensureUserId]) async {
     Query query = FirebaseFirestore.instance.collection('users');
-    if (branch != null && branch.isNotEmpty) {
+    if (branch != null && branch.isNotEmpty && branch != 'ALL') {
       query = query.where('branch', isEqualTo: branch);
     }
     final snapshot = await query.get();
@@ -174,8 +176,11 @@ class _OrdersPageState extends State<OrdersPage> {
 
     Query query = FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('branch', isEqualTo: branch)
         .where('lead_type', isEqualTo: 'order_confirmed');
+
+    if (branch != 'ALL') {
+      query = query.where('branch', isEqualTo: branch);
+    }
 
     if (selectedUser != null) {
       query = query.where(
@@ -350,9 +355,11 @@ class _OrdersPageState extends State<OrdersPage> {
                                 child: DropdownButtonFormField<String>(
                                   initialValue: selectedBranch,
                                   hint: const Text('Select Branch'),
-                                  items: availableBranches
-                                      .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                                      .toList(),
+                                  items: [
+                                    const DropdownMenuItem(value: 'ALL', child: Text('ALL')),
+                                    ...availableBranches
+                                        .map((b) => DropdownMenuItem(value: b, child: Text(b))),
+                                  ],
                                   onChanged: (value) {
                                     setState(() {
                                       selectedBranch = value;

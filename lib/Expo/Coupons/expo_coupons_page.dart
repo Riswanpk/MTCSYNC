@@ -54,6 +54,9 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
 
   String? _selectedExhibitionId;
   double _selectedMinCouponAmount = 10000.0;
+  int _selectedSerialMin = 1;
+  int _selectedSerialMax = 4000;
+  int _selectedSerialDigits = 4;
   String _selectedFilter = 'Eligible';
   String _searchQuery = '';
   bool _isLoading = false;
@@ -253,6 +256,9 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
               _couponSerialsByKey[group.customerKey] ?? []),
           allExhibitionSerials: _couponSerialsByKey,
           mode: mode,
+          serialMin: _selectedSerialMin,
+          serialMax: _selectedSerialMax,
+          serialDigits: _selectedSerialDigits,
         ),
       ),
     );
@@ -869,6 +875,9 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
                   setState(() {
                     _selectedExhibitionId = exhibitions.first.id;
                     _selectedMinCouponAmount = exhibitions.first.minCouponAmount;
+                    _selectedSerialMin = exhibitions.first.couponSerialMin;
+                    _selectedSerialMax = exhibitions.first.couponSerialMax;
+                    _selectedSerialDigits = exhibitions.first.couponSerialDigits;
                   });
                   _loadOrders(exhibitions.first.id);
                 });
@@ -884,6 +893,9 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
                   if (!mounted) return;
                   setState(() {
                     _selectedMinCouponAmount = selectedEx.minCouponAmount;
+                    _selectedSerialMin = selectedEx.couponSerialMin;
+                    _selectedSerialMax = selectedEx.couponSerialMax;
+                    _selectedSerialDigits = selectedEx.couponSerialDigits;
                   });
                 });
               }
@@ -1021,6 +1033,12 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
                                           _selectedExhibitionId = ex.id;
                                           _selectedMinCouponAmount =
                                               ex.minCouponAmount;
+                                          _selectedSerialMin =
+                                              ex.couponSerialMin;
+                                          _selectedSerialMax =
+                                              ex.couponSerialMax;
+                                          _selectedSerialDigits =
+                                              ex.couponSerialDigits;
                                         });
                                         _loadOrders(ex.id);
                                       },

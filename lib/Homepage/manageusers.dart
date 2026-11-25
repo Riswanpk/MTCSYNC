@@ -27,8 +27,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     'dme_admin',
     'dme_user',
     'supersale_admin',
-    'core_team',
-    'expo_user',
+    'expo_sales',
     'expo_acc',
     'expo_acc_main',
     'accounts',
@@ -418,8 +417,6 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return Icons.manage_accounts;
       case 'sync_head':
         return Icons.hub;
-      case 'core_team':
-        return Icons.group_work_rounded;
       case 'dme_admin':
         return Icons.admin_panel_settings;
       case 'dme_user':
@@ -428,7 +425,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return Icons.work_outline;
       case 'supersale_admin':
         return Icons.star_border;
-      case 'expo_user':
+      case 'expo_sales':
         return Icons.storefront_rounded;
       case 'expo_acc':
       case 'expo_acc_main':
@@ -452,8 +449,6 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return Colors.deepOrange;
       case 'sync_head':
         return Colors.blue;
-      case 'core_team':
-        return Colors.pink;
       case 'dme_admin':
         return Colors.indigo;
       case 'dme_user':
@@ -462,7 +457,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return Colors.purple;
       case 'supersale_admin':
         return Colors.amber.shade700;
-      case 'expo_user':
+      case 'expo_sales':
         return const Color(0xFF005BAC);
       case 'expo_acc':
       case 'expo_acc_main':
@@ -478,8 +473,6 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
 
   String _formatRoleName(String role) {
     switch (role) {
-      case 'core_team':
-        return 'Core Team';
       case 'asst_manager':
         return 'Asst Manager';
       case 'sync_head':
@@ -492,8 +485,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return 'Supersale Admin';
       case 'sme':
         return 'SME';
-      case 'expo_user':
-        return 'Expo User';
+      case 'expo_sales':
+        return 'Expo Sales';
       case 'expo_acc':
         return 'Expo Accounts';
       case 'expo_acc_main':
@@ -552,7 +545,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search by name or email',
+                hintText: 'Search by name, email, or role',
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
                 fillColor: isDark ? const Color(0xFF23272F) : Colors.white,
@@ -583,12 +576,17 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                   final users = _userDocs!
                       .where((doc) => doc.id != _currentUserId)
                       .where((doc) {
+                    final data = doc.data() as Map<String, dynamic>? ?? {};
                     final username =
-                        (doc['username'] ?? '').toString().toLowerCase();
-                    final email = (doc['email'] ?? '').toString().toLowerCase();
+                        (data['username'] ?? '').toString().toLowerCase();
+                    final email =
+                        (data['email'] ?? '').toString().toLowerCase();
+                    final role =
+                        (data['role'] ?? 'sales').toString().toLowerCase();
                     return _searchQuery.isEmpty ||
                         username.contains(_searchQuery) ||
-                        email.contains(_searchQuery);
+                        email.contains(_searchQuery) ||
+                        role.contains(_searchQuery);
                   }).toList();
                   if (users.isEmpty) {
                     return const Center(
@@ -604,9 +602,11 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                       separatorBuilder: (_, __) => const Divider(height: 16),
                       itemBuilder: (context, index) {
                         final user = users[index];
-                        final username = user['username'] ?? '';
-                        final email = user['email'] ?? '';
-                        final role = user['role'] ?? 'sales';
+                        final userData =
+                            user.data() as Map<String, dynamic>? ?? {};
+                        final username = userData['username'] ?? '';
+                        final email = userData['email'] ?? '';
+                        final role = userData['role'] ?? 'sales';
                         final docId = user.id; // <-- Use document ID
 
                         return ListTile(

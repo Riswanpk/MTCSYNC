@@ -15,6 +15,9 @@ class ExpoCouponManagePage extends StatefulWidget {
   final List<Map<String, dynamic>> existingSerials;
   final Map<String, List<Map<String, dynamic>>> allExhibitionSerials;
   final CouponManageMode mode;
+  final int serialMin;
+  final int serialMax;
+  final int serialDigits;
 
   const ExpoCouponManagePage({
     super.key,
@@ -28,6 +31,9 @@ class ExpoCouponManagePage extends StatefulWidget {
     required this.existingSerials,
     required this.allExhibitionSerials,
     required this.mode,
+    this.serialMin = 1,
+    this.serialMax = 4000,
+    this.serialDigits = 4,
   });
 
   @override
@@ -83,8 +89,10 @@ class _ExpoCouponManagePageState extends State<ExpoCouponManagePage> {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return 'Required';
     final numVal = int.tryParse(trimmed);
-    if (numVal == null || numVal < 1 || numVal > 4000) {
-      return 'Enter 0001 - 4000';
+    if (numVal == null || numVal < widget.serialMin || numVal > widget.serialMax) {
+      final minStr = widget.serialMin.toString().padLeft(widget.serialDigits, '0');
+      final maxStr = widget.serialMax.toString().padLeft(widget.serialDigits, '0');
+      return 'Enter $minStr - $maxStr';
     }
     return null;
   }
@@ -93,6 +101,7 @@ class _ExpoCouponManagePageState extends State<ExpoCouponManagePage> {
     String paddedSerial, {
     Set<int>? excludeOwnIndices,
   }) {
+    final targetNum = int.tryParse(paddedSerial);
     for (final entry in widget.allExhibitionSerials.entries) {
       for (int i = 0; i < entry.value.length; i++) {
         if (entry.key == widget.customerKey &&
@@ -101,7 +110,12 @@ class _ExpoCouponManagePageState extends State<ExpoCouponManagePage> {
           continue;
         }
         final s = (entry.value[i]['serial'] ?? '').toString().trim();
-        if (s == paddedSerial) return true;
+        final sNum = int.tryParse(s);
+        if (targetNum != null && sNum != null) {
+          if (sNum == targetNum) return true;
+        } else if (s == paddedSerial) {
+          return true;
+        }
       }
     }
     return false;
@@ -150,7 +164,9 @@ class _ExpoCouponManagePageState extends State<ExpoCouponManagePage> {
 
     if (!_formKey.currentState!.validate()) return;
     final normalized = _controllers
-        .map((c) => int.parse(c.text.trim()).toString().padLeft(4, '0'))
+        .map((c) => int.parse(c.text.trim())
+            .toString()
+            .padLeft(widget.serialDigits, '0'))
         .toList();
     if (normalized.toSet().length != normalized.length) {
       setState(() => _errorMsg = 'Duplicate serial numbers are not allowed.');
@@ -190,8 +206,16 @@ class _ExpoCouponManagePageState extends State<ExpoCouponManagePage> {
           return;
         }
         for (final s in normalized) {
+          final targetNum = int.tryParse(s);
           for (final entry in latestSerialsMap.entries) {
-            if (entry.value.any((e) => (e['serial'] ?? '').toString().trim() == s)) {
+            if (entry.value.any((e) {
+              final existingStr = (e['serial'] ?? '').toString().trim();
+              final existingNum = int.tryParse(existingStr);
+              if (targetNum != null && existingNum != null) {
+                return existingNum == targetNum;
+              }
+              return existingStr == s;
+            })) {
               if (mounted) {
                 setState(() {
                   _isSaving = false;
@@ -413,9 +437,10 @@ class _ExpoCouponManagePageState extends State<ExpoCouponManagePage> {
                           child: TextFormField(
                             controller: _controllers[i],
                             keyboardType: TextInputType.number,
-                            maxLength: 4,
+                            maxLength: widget.serialDigits,
                             decoration: InputDecoration(
-                              labelText: 'Coupon ${i + 1} Serial (0001 - 4000)',
+                              labelText:
+                                  'Coupon ${i + 1} Serial (${widget.serialMin.toString().padLeft(widget.serialDigits, '0')} - ${widget.serialMax.toString().padLeft(widget.serialDigits, '0')})',
                               counterText: '',
                               filled: true,
                               fillColor: cardColor,
