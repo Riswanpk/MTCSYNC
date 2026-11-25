@@ -9,11 +9,7 @@ const Color primaryGreen = Color(0xFF8CC63F);
 enum ExpoReportType {
   branchwise('Branchwise Amounts', Icons.account_tree_rounded),
   paymentMode('Payment Mode Breakdown', Icons.account_balance_wallet_rounded),
-  salesRep('Sales Rep Performance', Icons.badge_rounded),
-  orderType('Order Type Summary', Icons.category_rounded),
-  topItems('Top Selling Items', Icons.inventory_2_rounded),
-  dailyTrend('Daily Trend', Icons.calendar_today_rounded),
-  districtState('District & State Reach', Icons.location_on_rounded);
+  dailyTrend('Daily Trend', Icons.calendar_today_rounded);
 
   final String title;
   final IconData icon;
@@ -33,6 +29,7 @@ class ExpoAccountsDashboardPage extends StatefulWidget {
 class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
   Exhibition? _selectedExhibition;
   ExpoReportType _selectedReportType = ExpoReportType.branchwise;
+  int? _selectedDayIndex;
 
   // Filter toggle: whether to show All Orders or Verified/Completed Only
   bool _verifiedOnly = false;
@@ -554,7 +551,10 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(14),
                       onTap: () {
-                        setState(() => _selectedExhibition = ex);
+                        setState(() {
+                          _selectedExhibition = ex;
+                          _selectedDayIndex = null;
+                        });
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -646,18 +646,45 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
         final now = DateTime.now();
 
         // Single-pass O(N) calculation of the 6 primary KPIs + supplementary counts
+        // Build exhibition days list (Day 1, Day 2, ...)
+        final startDay = DateTime(
+          exhibition.startDate.year,
+          exhibition.startDate.month,
+          exhibition.startDate.day,
+        );
+        final endDay = DateTime(
+          exhibition.endDate.year,
+          exhibition.endDate.month,
+          exhibition.endDate.day,
+        );
+        final List<DateTime> exhibitionDays = [];
+        for (var d = startDay;
+            !d.isAfter(endDay) && exhibitionDays.length < 30;
+            d = d.add(const Duration(days: 1))) {
+          exhibitionDays.add(d);
+        }
+
+        final filteredOrders = (_selectedDayIndex != null &&
+                _selectedDayIndex! >= 0 &&
+                _selectedDayIndex! < exhibitionDays.length)
+            ? orders
+                .where((o) =>
+                    _isSameDay(o.orderDate, exhibitionDays[_selectedDayIndex!]))
+                .toList()
+            : orders;
+
         double totalAmount = 0.0;
         double totalToday = 0.0;
         double totalAdvance = 0.0;
         double totalAdvanceToday = 0.0;
-        int ordersTotal = orders.length;
+        int ordersTotal = filteredOrders.length;
         int ordersToday = 0;
 
         int verifiedCount = 0;
         int pendingCount = 0;
         double totalBalance = 0.0;
 
-        for (final o in orders) {
+        for (final o in filteredOrders) {
           final isToday = _isSameDay(o.orderDate, now);
           final adv = _effectiveAdvance(o);
 
@@ -687,6 +714,55 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (exhibitionDays.length > 1) ...[
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            ChoiceChip(
+                              label: const Text('All Days'),
+                              selected: _selectedDayIndex == null,
+                              selectedColor: primaryBlue,
+                              labelStyle: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _selectedDayIndex == null
+                                    ? Colors.white
+                                    : (isDark ? Colors.white70 : Colors.black87),
+                              ),
+                              onSelected: (_) =>
+                                  setState(() => _selectedDayIndex = null),
+                            ),
+                            const SizedBox(width: 8),
+                            ...List.generate(exhibitionDays.length, (idx) {
+                              final d = exhibitionDays[idx];
+                              final selected = _selectedDayIndex == idx;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  label: Text(
+                                      'Day ${idx + 1} (${DateFormat('dd MMM').format(d)})'),
+                                  selected: selected,
+                                  selectedColor: primaryGreen,
+                                  labelStyle: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: selected
+                                        ? Colors.white
+                                        : (isDark
+                                            ? Colors.white70
+                                            : Colors.black87),
+                                  ),
+                                  onSelected: (_) =>
+                                      setState(() => _selectedDayIndex = idx),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     // 6 Core KPI Cards in a sleek 2x3 Grid
                     _buildKpiGrid(
                       totalAmount: totalAmount,
@@ -1062,16 +1138,8 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
         return _buildBranchwiseReport(orders, isDark);
       case ExpoReportType.paymentMode:
         return _buildPaymentModeReport(orders, isDark);
-      case ExpoReportType.salesRep:
-        return _buildSalesRepReport(orders, isDark);
-      case ExpoReportType.orderType:
-        return _buildOrderTypeReport(orders, isDark);
-      case ExpoReportType.topItems:
-        return _buildTopItemsReport(orders, isDark);
       case ExpoReportType.dailyTrend:
         return _buildDailyTrendReport(orders, isDark);
-      case ExpoReportType.districtState:
-        return _buildDistrictStateReport(orders, isDark);
     }
   }
 
