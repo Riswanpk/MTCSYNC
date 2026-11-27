@@ -139,6 +139,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
 
   // Advance & Balance (for booking / stall delivery)
   final TextEditingController _advanceController = TextEditingController();
+  final TextEditingController _discountController = TextEditingController();
+  final TextEditingController _receivedAmountController = TextEditingController();
   final TextEditingController _cashSplitController = TextEditingController();
   final TextEditingController _onlineSplitController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -192,6 +194,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       _selectedPaymentMode = ExpoOrder.normalizePaymentMode(o.paymentMode);
       _existingPaymentProofUrl = o.paymentProofUrl;
       _advanceController.text = _formatEditableMoney(o.advanceAmount);
+      _discountController.text =
+          o.discountAmount > 0 ? _formatEditableMoney(o.discountAmount) : '';
       _cashSplitController.text = _formatEditableMoney(o.cashAmount);
       _onlineSplitController.text = _formatEditableMoney(o.onlineAmount);
       _notesController.text = o.notes;
@@ -290,6 +294,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     _districtController.dispose();
     _stateController.dispose();
     _advanceController.dispose();
+    _discountController.dispose();
+    _receivedAmountController.dispose();
     _cashSplitController.dispose();
     _onlineSplitController.dispose();
     _notesController.dispose();
@@ -723,7 +729,22 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   double get _grandTotal => _round2(_subtotal + _totalGst);
 
   /// Final payable amount (Round Off removed per requirement).
-  double get _netTotal => _grandTotal;
+  double get _discountAmount {
+    if (_selectedOrderType != 'Spot Delivery') return 0.0;
+    if (ExpoOrder.modeIsSplit(_selectedPaymentMode)) {
+      final splitText = _advanceController.text.trim();
+      if (splitText.isEmpty) return 0.0;
+      final splitVal = double.tryParse(splitText) ?? _grandTotal;
+      return (_grandTotal - splitVal).clamp(0.0, double.infinity);
+    }
+    final recText = _receivedAmountController.text.trim();
+    if (recText.isEmpty) return 0.0;
+    final recVal = double.tryParse(recText) ?? _grandTotal;
+    return (_grandTotal - recVal).clamp(0.0, double.infinity);
+  }
+
+  double get _netTotal =>
+      (_grandTotal - _discountAmount).clamp(0.0, double.infinity);
 
   /// Round-off kept at 0.0 (feature removed from order entry).
   double get _roundOff => 0.0;
@@ -961,6 +982,19 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   Text('₹${_totalGst.toStringAsFixed(2)}'),
                 ],
               ),
+              if (_discountAmount > 0) ...[
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Discount:'),
+                    Text(
+                      '- ₹${_discountAmount.toStringAsFixed(2)}',
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 6),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1253,6 +1287,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         subtotal: _round2(_subtotal),
         totalGst: _round2(_totalGst),
         roundOff: _roundOff,
+        discountAmount: _discountAmount,
         totalAmount: _netTotal,
         totalQty: _totalQty,
         advanceAmount: paidNow,
@@ -2532,6 +2567,59 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           ),
         ],
         const SizedBox(height: 16),
+        if (_selectedOrderType == 'Spot Delivery') ...[
+          _buildCard(
+            isDark: isDark,
+            title: 'Received & Discount',
+            icon: Icons.discount_rounded,
+            child: Column(
+              children: [
+                if (!ExpoOrder.modeIsSplit(_selectedPaymentMode)) ...[
+                  TextFormField(
+                    controller: _receivedAmountController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: 'Received Amount (₹)',
+                      hintText: _grandTotal.toStringAsFixed(2),
+                      prefixIcon: const Icon(Icons.payments_rounded,
+                          color: primaryGreen),
+                      filled: true,
+                      fillColor: isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : const Color(0xFFF1F5F9),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                TextFormField(
+                  key: ValueKey('discount_${_discountAmount.toStringAsFixed(2)}'),
+                  initialValue: _discountAmount.toStringAsFixed(2),
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: 'Discount (₹)',
+                    prefixIcon: const Icon(Icons.discount_rounded,
+                        color: primaryBlue),
+                    filled: true,
+                    fillColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : const Color(0xFFF1F5F9),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         _buildCard(
           isDark: isDark,
           title: 'Notes',

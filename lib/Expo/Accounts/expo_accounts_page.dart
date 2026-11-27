@@ -394,19 +394,90 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                       tabs: [
                         Tab(
                           icon: const Icon(Icons.flash_on_rounded, size: 18),
-                          text: 'Spot (${spotOrders.length})',
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('Spot'),
+                              if (spotOrders.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${spotOrders.length}',
+                                    style: const TextStyle(
+                                      color: Colors.redAccent,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                         Tab(
-                          icon: const Icon(Icons.storefront_rounded, size: 18),
-                          text: 'Stall (${stallOrders.length})',
+                          icon:
+                              const Icon(Icons.storefront_rounded, size: 18),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('Stall'),
+                              if (stallOrders.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${stallOrders.length}',
+                                    style: const TextStyle(
+                                      color: Colors.redAccent,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                         Tab(
-                          icon: const Icon(Icons.local_shipping_rounded, size: 18),
-                          text: 'Booking (${bookingOrders.length})',
+                          icon: const Icon(Icons.local_shipping_rounded,
+                              size: 18),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('Booking'),
+                              if (bookingOrders.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${bookingOrders.length}',
+                                    style: const TextStyle(
+                                      color: Colors.redAccent,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
-                        Tab(
-                          icon: const Icon(Icons.check_circle_rounded, size: 18),
-                          text: 'Completed (${completedOrders.length})',
+                        const Tab(
+                          icon: Icon(Icons.check_circle_rounded, size: 18),
+                          text: 'Completed',
                         ),
                       ],
                     ),
@@ -1219,12 +1290,30 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        DateFormat('dd MMM yyyy').format(order.orderDate),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: widget.isDark ? Colors.white38 : Colors.black45,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            DateFormat('hh:mm a')
+                                .format(order.orderDate.toLocal()),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: widget.isDark
+                                  ? Colors.white60
+                                  : Colors.black54,
+                            ),
+                          ),
+                          Text(
+                            DateFormat('dd MMM yyyy').format(order.orderDate),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: widget.isDark
+                                  ? Colors.white38
+                                  : Colors.black45,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

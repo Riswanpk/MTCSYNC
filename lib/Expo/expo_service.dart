@@ -288,6 +288,7 @@ class ExpoOrder {
   final double subtotal;
   final double totalGst;
   final double roundOff; // Round-off applied to reach a whole-rupee total
+  final double discountAmount;
   final double totalAmount; // Final (rounded) amount payable
   final int totalQty;
   final double advanceAmount; // Advance paid (for booking / stall delivery)
@@ -352,6 +353,7 @@ class ExpoOrder {
     required this.subtotal,
     required this.totalGst,
     this.roundOff = 0.0,
+    this.discountAmount = 0.0,
     required this.totalAmount,
     required this.totalQty,
     this.advanceAmount = 0.0,
@@ -407,6 +409,7 @@ class ExpoOrder {
       'subtotal': subtotal,
       'total_gst': totalGst,
       'round_off': roundOff,
+      'discount_amount': discountAmount,
       'total_amount': totalAmount,
       'total_qty': totalQty,
       'advance_amount': advanceAmount,
@@ -487,6 +490,7 @@ class ExpoOrder {
       subtotal: _toDouble(data['subtotal']),
       totalGst: _toDouble(data['total_gst']),
       roundOff: _toDouble(data['round_off']),
+      discountAmount: _toDouble(data['discount_amount']),
       totalAmount: totalAmount,
       totalQty: _toInt(data['total_qty']),
       advanceAmount: advance,
@@ -548,6 +552,7 @@ class ExpoOrder {
     double? subtotal,
     double? totalGst,
     double? roundOff,
+    double? discountAmount,
     double? totalAmount,
     int? totalQty,
     double? advanceAmount,
@@ -600,6 +605,7 @@ class ExpoOrder {
       subtotal: subtotal ?? this.subtotal,
       totalGst: totalGst ?? this.totalGst,
       roundOff: roundOff ?? this.roundOff,
+      discountAmount: discountAmount ?? this.discountAmount,
       totalAmount: totalAmount ?? this.totalAmount,
       totalQty: totalQty ?? this.totalQty,
       advanceAmount: advanceAmount ?? this.advanceAmount,

@@ -446,6 +446,20 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                   ),
                 ],
                 const SizedBox(height: 6),
+                if (order.discountAmount > 0) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Discount:', style: TextStyle(fontSize: 13)),
+                      Text(
+                        '- ₹${order.discountAmount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.redAccent),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                ],
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [

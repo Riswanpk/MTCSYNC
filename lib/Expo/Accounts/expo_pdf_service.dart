@@ -293,13 +293,21 @@ class ExpoPdfService {
                           '${order.roundOff >= 0 ? '+' : '-'} Rs. ${order.roundOff.abs().toStringAsFixed(2)}',
                           false,
                         ),
-                      _buildTotalRow('Grand Total',
-                          'Rs. ${order.totalAmount.toStringAsFixed(2)}', true),
                       _buildTotalRow(
-                        'Advance (${ExpoOrder.normalizePaymentMode(order.paymentMode)})',
+                          'Grand Total',
+                          'Rs. ${(order.totalAmount + order.discountAmount).toStringAsFixed(2)}',
+                          true),
+                      _buildTotalRow(
+                        '${order.orderType == 'Spot Delivery' ? 'Received' : 'Advance'} (${ExpoOrder.normalizePaymentMode(order.paymentMode)})',
                         'Rs. ${order.advanceAmount.toStringAsFixed(2)}',
                         false,
                       ),
+                      if (order.discountAmount > 0)
+                        _buildTotalRow(
+                          'Discount',
+                          '- Rs. ${order.discountAmount.toStringAsFixed(2)}',
+                          false,
+                        ),
                       _buildTotalRow('Balance Amount',
                           'Rs. ${order.balanceAmount.toStringAsFixed(2)}', true),
                     ],

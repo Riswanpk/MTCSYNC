@@ -244,6 +244,22 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
       }
     }
 
+    if (_deliveryPhotoFile == null) {
+      setState(() {
+        _errorText = 'Delivery photo is mandatory for stall pickup.';
+      });
+      return;
+    }
+
+    if (balance > 0 &&
+        ExpoOrder.modeRequiresReceipt(_selectedMode) &&
+        _receiptFile == null) {
+      setState(() {
+        _errorText = 'Payment receipt is mandatory for $_selectedMode.';
+      });
+      return;
+    }
+
     setState(() {
       _isSaving = true;
       _errorText = null;

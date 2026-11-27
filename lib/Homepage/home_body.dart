@@ -46,6 +46,7 @@ import '../Expo/User/expo_user_mainpage.dart';
 import '../Expo/Accounts/expo_accounts_page.dart';
 import '../Expo/Accounts/expo_accounts_dashboard_page.dart';
 import '../Expo/Accounts/expo_todays_collection_page.dart';
+import '../Expo/Admin/post_expo_page.dart';
 import '../Expo/Accounts/BranchAccounts/accounts_expo_orders_page.dart';
 import '../Expo/Coupons/expo_coupons_page.dart';
 import '../Expo/Manager/expo_manager_assign_page.dart';
@@ -827,6 +828,34 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           textColor: Colors.white,
           icon: Icons.feedback_rounded,
           badgeCount: widget.complaintCount > 0 ? widget.complaintCount : null,
+        ),
+      if (role == 'admin')
+        NeumorphicButton(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ExpoCouponsPage(),
+              ),
+            );
+          },
+          text: 'Expo Coupons',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.confirmation_number_rounded,
+        ),
+      if (role == 'admin')
+        NeumorphicButton(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const PostExpoPage(),
+              ),
+            );
+          },
+          text: 'Post Expo',
+          color: primaryGreen,
+          textColor: Colors.white,
+          icon: Icons.analytics_rounded,
         ),
       if (role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
