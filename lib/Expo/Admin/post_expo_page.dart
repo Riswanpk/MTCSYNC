@@ -18,10 +18,14 @@ class _PostExpoPageState extends State<PostExpoPage>
   String? _selectedExhibitionId;
   String? _selectedPrefSalesmanBranch;
   String? _selectedDeliveryBranch;
+  late final Stream<List<Exhibition>> _exhibitionsStream;
+  String? _ordersStreamExId;
+  Stream<List<ExpoOrder>>? _ordersStream;
 
   @override
   void initState() {
     super.initState();
+    _exhibitionsStream = ExpoService.instance.streamExhibitions();
     _tabController = TabController(length: 3, vsync: this);
   }
 
@@ -41,7 +45,7 @@ class _PostExpoPageState extends State<PostExpoPage>
         isDark ? const Color(0xFF0A192F) : const Color(0xFFF4F7FA);
 
     return StreamBuilder<List<Exhibition>>(
-      stream: ExpoService.instance.streamExhibitions(),
+      stream: _exhibitionsStream,
       builder: (context, exSnap) {
         final exhibitions = exSnap.data ?? [];
         if (exhibitions.isEmpty) {
@@ -64,6 +68,12 @@ class _PostExpoPageState extends State<PostExpoPage>
             return ended.isNotEmpty ? ended.first : exhibitions.first;
           },
         );
+
+        if (_ordersStreamExId != selectedEx.id || _ordersStream == null) {
+          _ordersStreamExId = selectedEx.id;
+          _ordersStream =
+              ExpoService.instance.streamOrders(exhibitionId: selectedEx.id);
+        }
 
         return Scaffold(
           backgroundColor: bgColor,
@@ -101,8 +111,7 @@ class _PostExpoPageState extends State<PostExpoPage>
             ),
           ),
           body: StreamBuilder<List<ExpoOrder>>(
-            stream:
-                ExpoService.instance.streamOrders(exhibitionId: selectedEx.id),
+            stream: _ordersStream,
             builder: (context, orderSnap) {
               if (orderSnap.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
