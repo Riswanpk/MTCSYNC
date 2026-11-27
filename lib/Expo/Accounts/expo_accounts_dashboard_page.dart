@@ -11,12 +11,8 @@ enum ExpoReportType {
   paymentMode('Payment Mode Breakdown', Icons.account_balance_wallet_rounded),
   salesRep('Sales Rep Performance', Icons.badge_rounded),
   orderType('Order Type Summary', Icons.category_rounded),
-  topItems('Top Selling Items', Icons.inventory_2_rounded),
   dailyTrend('Daily Trend', Icons.calendar_today_rounded),
-  districtState('District & State Reach', Icons.location_on_rounded),
-  preferredSalesman('Preferred Salesman', Icons.person_pin_rounded),
-  assignedDeliveryStatus('Assigned Delivery Status', Icons.local_shipping_rounded),
-  balanceCollection('Balance & Pending Dues', Icons.pending_actions_rounded);
+  districtState('District & State Reach', Icons.location_on_rounded);
 
   final String title;
   final IconData icon;
@@ -1195,18 +1191,10 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
         return _buildSalesRepReport(orders, isDark);
       case ExpoReportType.orderType:
         return _buildOrderTypeReport(orders, isDark);
-      case ExpoReportType.topItems:
-        return _buildTopItemsReport(orders, isDark);
       case ExpoReportType.dailyTrend:
         return _buildDailyTrendReport(orders, isDark);
       case ExpoReportType.districtState:
         return _buildDistrictStateReport(orders, isDark);
-      case ExpoReportType.preferredSalesman:
-        return _buildPreferredSalesmanReport(orders, isDark);
-      case ExpoReportType.assignedDeliveryStatus:
-        return _buildAssignedDeliveryReport(orders, isDark);
-      case ExpoReportType.balanceCollection:
-        return _buildBalanceCollectionReport(orders, isDark);
     }
   }
 

@@ -80,8 +80,17 @@ class _PostExpoPageState extends State<PostExpoPage>
           appBar: AppBar(
             title: const Text('Post Expo',
                 style: TextStyle(fontWeight: FontWeight.bold)),
-            backgroundColor: _primaryBlue,
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [_primaryBlue, Color(0xFF0077CC)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+            ),
             foregroundColor: Colors.white,
+            elevation: 0,
             actions: [
               if (exhibitions.length > 1)
                 PopupMenuButton<String>(
