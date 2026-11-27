@@ -290,8 +290,8 @@ class _PostExpoPageState extends State<PostExpoPage>
       children: [
         _buildBranchFilterBar(
           branches,
-          _selectedPrefSalesmanBranch,
-          (val) => setState(() => _selectedPrefSalesmanBranch = val),
+          _selectedDeliveryBranch,
+          (val) => setState(() => _selectedDeliveryBranch = val),
           isDark,
         ),
         Expanded(
