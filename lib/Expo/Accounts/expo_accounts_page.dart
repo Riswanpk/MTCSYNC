@@ -369,7 +369,12 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                   .where((o) =>
                       o.orderType == 'Stall Delivery' &&
                       o.status != 'Completed')
-                  .toList();
+                  .toList()
+                ..sort((a, b) {
+                  final aPending = a.stallPickupStatus != 'Picked Up' ? 0 : 1;
+                  final bPending = b.stallPickupStatus != 'Picked Up' ? 0 : 1;
+                  return aPending.compareTo(bPending);
+                });
               final bookingOrders = filteredOrders
                   .where((o) =>
                       o.orderType == 'Booking' &&
@@ -1220,7 +1225,10 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                           border: Border.all(color: typeColor),
                         ),
                         child: Text(
-                          order.orderType,
+                          order.orderType == 'Stall Delivery' &&
+                                  order.stallPickupStatus == 'Picked Up'
+                              ? 'Stall Delivery → Picked Up'
+                              : order.orderType,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -1518,10 +1526,15 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                           children: [
                             Text(
                               'Advance: ₹${order.advanceAmount.toStringAsFixed(2)}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: primaryGreen,
+                                color: (order.orderType == 'Stall Delivery' &&
+                                        order.stallPickupStatus == 'Picked Up')
+                                    ? (widget.isDark
+                                        ? Colors.white
+                                        : Colors.black87)
+                                    : primaryGreen,
                               ),
                             ),
                             if (order.cashAmount > 0 || order.onlineAmount > 0)

@@ -18,12 +18,12 @@ Future<bool> showStallPickupPaymentDialog(
   required ExpoOrder order,
   required bool isAccountsUser,
 }) async {
-  final result = await showDialog<bool>(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) => _StallPickupPaymentDialog(
-      order: order,
-      isAccountsUser: isAccountsUser,
+  final result = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (ctx) => _StallPickupPaymentDialog(
+        order: order,
+        isAccountsUser: isAccountsUser,
+      ),
     ),
   );
   return result == true;
@@ -48,6 +48,7 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
   late final TextEditingController _totalAdvanceController;
   late final TextEditingController _cashController;
   late final TextEditingController _onlineController;
+  late final TextEditingController _receivedController;
 
   String _selectedMode = 'Cash';
   File? _receiptFile;
@@ -65,6 +66,7 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
     _totalAdvanceController = TextEditingController();
     _cashController = TextEditingController();
     _onlineController = TextEditingController();
+    _receivedController = TextEditingController();
   }
 
   @override
@@ -72,6 +74,7 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
     _totalAdvanceController.dispose();
     _cashController.dispose();
     _onlineController.dispose();
+    _receivedController.dispose();
     super.dispose();
   }
 
@@ -219,28 +222,48 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
         onPicked: (file) => _deliveryPhotoFile = file,
       );
 
+  double get _pickupDiscount {
+    final bal = _balanceDue;
+    if (bal <= 0) return 0.0;
+    if (ExpoOrder.modeIsSplit(_selectedMode)) {
+      final splitText = _totalAdvanceController.text.trim();
+      if (splitText.isEmpty) return 0.0;
+      final splitVal = double.tryParse(splitText) ?? bal;
+      return (bal - splitVal).clamp(0.0, bal);
+    }
+    final recText = _receivedController.text.trim();
+    if (recText.isEmpty) return 0.0;
+    final recVal = double.tryParse(recText) ?? bal;
+    return (bal - recVal).clamp(0.0, bal);
+  }
+
   Future<void> _submit() async {
     final double balance = _balanceDue;
     double pickupCash = 0.0;
     double pickupOnline = 0.0;
+    double payable = balance;
 
     if (balance > 0) {
-      if (_selectedMode == 'Cash') {
-        pickupCash = _round2(balance);
-      } else if (ExpoOrder.modeIsSplit(_selectedMode)) {
+      if (ExpoOrder.modeIsSplit(_selectedMode)) {
         pickupCash = _round2(double.tryParse(_cashController.text.trim()) ?? 0.0);
         pickupOnline =
             _round2(double.tryParse(_onlineController.text.trim()) ?? 0.0);
-        if ((pickupCash + pickupOnline - balance).abs() > 0.05) {
+        payable = _round2(pickupCash + pickupOnline);
+        if (payable <= 0 || payable > balance + 0.05) {
           final label = ExpoOrder.onlineLabelForMode(_selectedMode);
           setState(() {
             _errorText =
-                'Cash + $label must equal ₹${balance.toStringAsFixed(2)}';
+                'Cash + $label must be between ₹0.01 and ₹${balance.toStringAsFixed(2)}';
           });
           return;
         }
       } else {
-        pickupOnline = _round2(balance);
+        payable = _round2((balance - _pickupDiscount).clamp(0.0, balance));
+        if (_selectedMode == 'Cash') {
+          pickupCash = payable;
+        } else {
+          pickupOnline = payable;
+        }
       }
     }
 
@@ -293,7 +316,8 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
         widget.order.id,
         currentBalance: widget.order.balanceAmount,
         pickupPaymentMode: balance > 0 ? _selectedMode : null,
-        pickupAmount: balance,
+        pickupAmount: payable,
+        pickupDiscount: _pickupDiscount,
         pickupCashAmount: pickupCash,
         pickupOnlineAmount: pickupOnline,
         pickupPaymentProofUrl: proofUrl,
@@ -323,24 +347,29 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
       FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
     ];
 
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      title: const Row(
-        children: [
-          Icon(Icons.storefront_rounded, color: _kPrimaryBlue),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Stall Delivery Pickup',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+    return Scaffold(
+      backgroundColor:
+          isDark ? const Color(0xFF0A192F) : const Color(0xFFF4F7FA),
+      appBar: AppBar(
+        title: const Text(
+          'Stall Delivery Pickup',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_kPrimaryBlue, Color(0xFF0077CC)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
           ),
-        ],
+        ),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
-      content: SingleChildScrollView(
-        child: SizedBox(
-          width: double.maxFinite,
-          child: Column(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -465,6 +494,53 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
                     ],
                   ),
                 ],
+                if (!isSplit) ...[
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: _receivedController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: numFormatters,
+                    onChanged: (_) => setState(() => _errorText = null),
+                    decoration: InputDecoration(
+                      labelText: 'Received Amount (₹)',
+                      hintText: _balanceDue.toStringAsFixed(2),
+                      prefixIcon: const Icon(Icons.payments_rounded,
+                          color: _kPrimaryGreen),
+                      filled: true,
+                      fillColor: isDark
+                          ? const Color(0xFF0F243E)
+                          : Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Discount (₹)',
+                    prefixIcon: const Icon(Icons.discount_rounded,
+                        color: _kPrimaryBlue),
+                    filled: true,
+                    fillColor: isDark
+                        ? const Color(0xFF0F243E)
+                        : Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  child: Text(
+                    _pickupDiscount.toStringAsFixed(2),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
                 if (requiresReceipt) ...[
                   const SizedBox(height: 12),
                   if (_receiptFile != null) ...[
@@ -573,34 +649,37 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
                   ),
                 ),
               ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: _isSaving ? null : _submit,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.check_circle_rounded, size: 18),
+                  label: Text(_isSaving
+                      ? 'Saving...'
+                      : (hasBalance
+                          ? 'Confirm Pickup & Payment'
+                          : 'Confirm Pickup')),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kPrimaryGreen,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
-        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton.icon(
-          onPressed: _isSaving ? null : _submit,
-          icon: _isSaving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
-                )
-              : const Icon(Icons.check_circle_rounded, size: 18),
-          label: Text(_isSaving
-              ? 'Saving...'
-              : (hasBalance ? 'Confirm Pickup & Payment' : 'Confirm Pickup')),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _kPrimaryGreen,
-            foregroundColor: Colors.white,
-          ),
-        ),
-      ],
     );
   }
 

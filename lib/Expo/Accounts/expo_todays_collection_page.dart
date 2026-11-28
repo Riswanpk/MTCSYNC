@@ -59,6 +59,17 @@ class _ExpoTodaysCollectionPageState extends State<ExpoTodaysCollectionPage> {
     return dt.year == now.year && dt.month == now.month && dt.day == now.day;
   }
 
+  double _collectedTodayAmount(ExpoOrder o) {
+    double sum = 0.0;
+    if (_isToday(o.orderDate)) sum += o.advanceAmount;
+    if (o.pickupAmount > 0 &&
+        o.pickedUpAt != null &&
+        _isToday(o.pickedUpAt!)) {
+      sum += o.pickupAmount;
+    }
+    return sum > 0 ? sum : o.advanceAmount;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -160,7 +171,7 @@ class _ExpoTodaysCollectionPageState extends State<ExpoTodaysCollectionPage> {
                     .compareTo(a.completedAt ?? a.orderDate));
 
               final double totalAdvance = collectedOrders.fold(
-                  0.0, (acc, o) => acc + o.advanceAmount);
+                  0.0, (acc, o) => acc + _collectedTodayAmount(o));
 
               return Column(
                 children: [
@@ -589,7 +600,7 @@ class _ExpoTodaysCollectionPageState extends State<ExpoTodaysCollectionPage> {
                         ),
                       ),
                       Text(
-                        'Advance: ₹${order.advanceAmount.toStringAsFixed(2)}',
+                        'Advance: ₹${_collectedTodayAmount(order).toStringAsFixed(2)}',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,

@@ -75,7 +75,17 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
 
   /// Effective collected total for an order:
   /// Spot Delivery = full totalAmount, Stall / Booking = advanceAmount + pickupAmount.
-  double _effectiveAdvance(ExpoOrder o) => o.totalPaidAmount;
+  double _effectiveAdvance(ExpoOrder o, {DateTime? day}) {
+    if (day == null) return o.totalPaidAmount;
+    double sum = 0.0;
+    if (_isSameDay(o.orderDate, day)) sum += o.advanceAmount;
+    if (o.pickupAmount > 0 &&
+        o.pickedUpAt != null &&
+        _isSameDay(o.pickedUpAt!, day)) {
+      sum += o.pickupAmount;
+    }
+    return sum;
+  }
 
   void _showReportTypeSelector(BuildContext context, bool isDark) {
     showModalBottomSheet<void>(
@@ -685,12 +695,19 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
           exhibitionDays.add(d);
         }
 
-        final filteredOrders = (_selectedDayIndex != null &&
+        final DateTime? selectedDay = (_selectedDayIndex != null &&
                 _selectedDayIndex! >= 0 &&
                 _selectedDayIndex! < exhibitionDays.length)
+            ? exhibitionDays[_selectedDayIndex!]
+            : null;
+
+        final filteredOrders = selectedDay != null
             ? orders
                 .where((o) =>
-                    _isSameDay(o.orderDate, exhibitionDays[_selectedDayIndex!]))
+                    _isSameDay(o.orderDate, selectedDay) ||
+                    (o.pickupAmount > 0 &&
+                        o.pickedUpAt != null &&
+                        _isSameDay(o.pickedUpAt!, selectedDay)))
                 .toList()
             : orders;
 
@@ -706,17 +723,25 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
         double totalBalance = 0.0;
 
         for (final o in filteredOrders) {
-          final isToday = _isSameDay(o.orderDate, now);
-          final adv = _effectiveAdvance(o);
+          final isOrderToday = _isSameDay(o.orderDate, now);
+          final isPickupToday = o.pickupAmount > 0 &&
+              o.pickedUpAt != null &&
+              _isSameDay(o.pickedUpAt!, now);
+          final adv = _effectiveAdvance(o, day: selectedDay);
 
-          totalAmount += o.totalAmount;
+          if (selectedDay == null || _isSameDay(o.orderDate, selectedDay)) {
+            totalAmount += o.totalAmount;
+          }
           totalAdvance += adv;
           totalBalance += o.balanceAmount;
 
-          if (isToday) {
+          if (isOrderToday) {
             ordersToday++;
             totalToday += o.totalAmount;
-            totalAdvanceToday += adv;
+            totalAdvanceToday += o.advanceAmount;
+          }
+          if (isPickupToday) {
+            totalAdvanceToday += o.pickupAmount;
           }
 
           if (o.status == 'Completed') {
@@ -1446,17 +1471,28 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
     for (final o in orders) {
       final mode = ExpoOrder.normalizePaymentMode(o.paymentMode);
       final row = map.putIfAbsent(mode, () => _AggRow(title: mode));
-      final adv = _effectiveAdvance(o);
       row.bills++;
       row.totalAmount += o.totalAmount;
-      row.advanceCollected += adv;
+      row.advanceCollected += o.advanceAmount;
       if (o.status == 'Completed') {
-        row.verifiedAdvance += adv;
+        row.verifiedAdvance += o.advanceAmount;
       } else {
-        row.pendingAdvance += adv;
+        row.pendingAdvance += o.advanceAmount;
       }
-      grandAdvance += adv;
+      grandAdvance += o.advanceAmount;
       grandTotal += o.totalAmount;
+
+      if (o.pickupAmount > 0 && o.pickupPaymentMode != null) {
+        final pMode = ExpoOrder.normalizePaymentMode(o.pickupPaymentMode!);
+        final pRow = map.putIfAbsent(pMode, () => _AggRow(title: pMode));
+        pRow.advanceCollected += o.pickupAmount;
+        if (o.status == 'Completed') {
+          pRow.verifiedAdvance += o.pickupAmount;
+        } else {
+          pRow.pendingAdvance += o.pickupAmount;
+        }
+        grandAdvance += o.pickupAmount;
+      }
     }
 
     final list = map.values.where((r) => r.bills > 0).toList()
@@ -1908,8 +1944,19 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
       );
       row.bills++;
       row.totalAmount += o.totalAmount;
-      row.advanceCollected += _effectiveAdvance(o);
+      row.advanceCollected += o.advanceAmount;
       grandTotal += o.totalAmount;
+
+      if (o.pickupAmount > 0 && o.pickedUpAt != null) {
+        final pDate = o.pickedUpAt!.toLocal();
+        final pKey = DateFormat('yyyy-MM-dd').format(pDate);
+        final pPretty = DateFormat('EEE, dd MMM yyyy').format(pDate);
+        final pRow = map.putIfAbsent(
+          pKey,
+          () => _AggRow(title: pPretty, tag: pKey),
+        );
+        pRow.advanceCollected += o.pickupAmount;
+      }
     }
 
     final list = map.values.toList()

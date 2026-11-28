@@ -815,16 +815,16 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   }
 
   void _onCashSplitChanged(String raw) {
-    if (_cashSplitAmount + _onlineSplitAmount > _netTotal) {
-      final maxCash = (_netTotal - _onlineSplitAmount).clamp(0.0, _netTotal);
+    if (_cashSplitAmount + _onlineSplitAmount > _grandTotal) {
+      final maxCash = (_grandTotal - _onlineSplitAmount).clamp(0.0, _grandTotal);
       _setClampedControllerText(_cashSplitController, maxCash);
     }
     setState(() => _syncReadOnlySplitTotal());
   }
 
   void _onOnlineSplitChanged(String raw) {
-    if (_cashSplitAmount + _onlineSplitAmount > _netTotal) {
-      final maxOnline = (_netTotal - _cashSplitAmount).clamp(0.0, _netTotal);
+    if (_cashSplitAmount + _onlineSplitAmount > _grandTotal) {
+      final maxOnline = (_grandTotal - _cashSplitAmount).clamp(0.0, _grandTotal);
       _setClampedControllerText(_onlineSplitController, maxOnline);
     }
     setState(() => _syncReadOnlySplitTotal());
@@ -2568,54 +2568,46 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         ],
         const SizedBox(height: 16),
         if (_selectedOrderType == 'Spot Delivery') ...[
-          _buildCard(
-            isDark: isDark,
-            title: 'Received & Discount',
-            icon: Icons.discount_rounded,
-            child: Column(
-              children: [
-                if (!ExpoOrder.modeIsSplit(_selectedPaymentMode)) ...[
-                  TextFormField(
-                    controller: _receivedAmountController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      labelText: 'Received Amount (₹)',
-                      hintText: _grandTotal.toStringAsFixed(2),
-                      prefixIcon: const Icon(Icons.payments_rounded,
-                          color: primaryGreen),
-                      filled: true,
-                      fillColor: isDark
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : const Color(0xFFF1F5F9),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                TextFormField(
-                  key: ValueKey('discount_${_discountAmount.toStringAsFixed(2)}'),
-                  initialValue: _discountAmount.toStringAsFixed(2),
-                  readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: 'Discount (₹)',
-                    prefixIcon: const Icon(Icons.discount_rounded,
-                        color: primaryBlue),
-                    filled: true,
-                    fillColor: isDark
-                        ? Colors.white.withValues(alpha: 0.05)
-                        : const Color(0xFFF1F5F9),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+          if (!ExpoOrder.modeIsSplit(_selectedPaymentMode)) ...[
+            TextFormField(
+              controller: _receivedAmountController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Received Amount (₹)',
+                hintText: _grandTotal.toStringAsFixed(2),
+                prefixIcon: const Icon(Icons.payments_rounded,
+                    color: primaryGreen),
+                filled: true,
+                fillColor: isDark ? const Color(0xFF0F243E) : Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
                 ),
-              ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Discount (₹)',
+              prefixIcon:
+                  const Icon(Icons.discount_rounded, color: primaryBlue),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF0F243E) : Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            child: Text(
+              _discountAmount.toStringAsFixed(2),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
             ),
           ),
           const SizedBox(height: 16),

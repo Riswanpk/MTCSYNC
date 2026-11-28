@@ -591,11 +591,23 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                   style: TextStyle(color: Colors.white)),
             ),
           ],
-          if (order.status != 'Completed' && _selectedExhibition != null)
+          if (order.status != 'Completed' &&
+              _selectedExhibition != null &&
+              !(order.orderType == 'Stall Delivery' &&
+                  order.stallPickupStatus == 'Picked Up'))
             OutlinedButton.icon(
               onPressed: () {
                 final ex = _selectedExhibition!;
                 Navigator.of(ctx).pop();
+                if (order.orderType == 'Stall Delivery' &&
+                    order.stallPickupStatus == 'Picked Up') {
+                  showStallPickupPaymentDialog(
+                    context,
+                    order: order,
+                    isAccountsUser: false,
+                  );
+                  return;
+                }
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => ExpoOrderFormPage(
@@ -1095,11 +1107,25 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                               o.orderType != 'Stall Delivery')
                           .toList();
                       final completedOrders = visibleOrders
-                          .where((o) => o.status == 'Completed')
+                          .where((o) =>
+                              o.status == 'Completed' &&
+                              o.orderType != 'Stall Delivery')
                           .toList();
                       final stallOrders = visibleOrders
                           .where((o) => o.orderType == 'Stall Delivery')
-                          .toList();
+                          .toList()
+                        ..sort((a, b) {
+                          final aPicked =
+                              a.stallPickupStatus == 'Picked Up' ? 1 : 0;
+                          final bPicked =
+                              b.stallPickupStatus == 'Picked Up' ? 1 : 0;
+                          if (aPicked != bPicked) {
+                            return aPicked.compareTo(bPicked);
+                          }
+                          final aVerified = a.status == 'Completed' ? 1 : 0;
+                          final bVerified = b.status == 'Completed' ? 1 : 0;
+                          return aVerified.compareTo(bVerified);
+                        });
 
                       return TabBarView(
                         children: [
@@ -1412,7 +1438,10 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                           border: Border.all(color: typeColor, width: 1),
                         ),
                         child: Text(
-                          order.orderType,
+                          order.orderType == 'Stall Delivery' &&
+                                  order.stallPickupStatus == 'Picked Up'
+                              ? 'Stall Delivery → Picked Up'
+                              : order.orderType,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -1496,6 +1525,35 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: (order.status == 'Completed'
+                                      ? primaryGreen
+                                      : Colors.orange.shade700)
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: order.status == 'Completed'
+                                    ? primaryGreen
+                                    : Colors.orange.shade700,
+                              ),
+                            ),
+                            child: Text(
+                              order.status == 'Completed'
+                                  ? 'Verified'
+                                  : 'Pending Verification',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: order.status == 'Completed'
+                                    ? primaryGreen
+                                    : Colors.orange.shade700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
                           Text(
                             '${order.items.length} Item${order.items.length != 1 ? "s" : ""}  (${order.totalQty} pcs)',
                             style: TextStyle(

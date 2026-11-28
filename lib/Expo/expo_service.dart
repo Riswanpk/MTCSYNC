@@ -303,6 +303,7 @@ class ExpoOrder {
   final double pickupCashAmount; // Cash collected at Stall Pickup
   final double pickupOnlineAmount; // UPI / Bank collected at Stall Pickup
   final String? pickupPaymentProofUrl; // Receipt URL uploaded at Stall Pickup
+  final String? deliveryPhotoUrl;
   final DateTime? pickedUpAt; // Timestamp when stall delivery was picked up
   final String notes; // Order notes
   final DateTime? deliveryDate; // Delivery date for booking orders
@@ -368,6 +369,7 @@ class ExpoOrder {
     this.pickupCashAmount = 0.0,
     this.pickupOnlineAmount = 0.0,
     this.pickupPaymentProofUrl,
+    this.deliveryPhotoUrl,
     this.pickedUpAt,
     this.notes = '',
     this.deliveryDate,
@@ -510,6 +512,7 @@ class ExpoOrder {
       pickupCashAmount: _toDouble(data['pickup_cash_amount']),
       pickupOnlineAmount: _toDouble(data['pickup_online_amount']),
       pickupPaymentProofUrl: data['pickup_payment_proof_url'],
+      deliveryPhotoUrl: data['delivery_photo_url'],
       pickedUpAt: _parseNullableDate(data['picked_up_at']),
       notes: (data['notes'] ?? '').toString(),
       deliveryDate: _parseNullableDate(data['delivery_date']),
@@ -1032,6 +1035,7 @@ class ExpoService {
     required double currentBalance,
     String? pickupPaymentMode,
     double pickupAmount = 0.0,
+    double pickupDiscount = 0.0,
     double pickupCashAmount = 0.0,
     double pickupOnlineAmount = 0.0,
     String? pickupPaymentProofUrl,
@@ -1039,7 +1043,7 @@ class ExpoService {
     bool completeImmediately = true,
   }) async {
     final now = _ts(DateTime.now());
-    final remaining = currentBalance - pickupAmount;
+    final remaining = currentBalance - pickupAmount - pickupDiscount;
     final newBalance = remaining < 0.01 ? 0.0 : remaining;
 
     final Map<String, dynamic> payload = {
@@ -1047,6 +1051,10 @@ class ExpoService {
       'picked_up_at': now,
       'balance_amount': newBalance,
     };
+
+    if (pickupDiscount > 0) {
+      payload['discount_amount'] = pickupDiscount;
+    }
 
     if (deliveryPhotoUrl != null && deliveryPhotoUrl.isNotEmpty) {
       payload['delivery_photo_url'] = deliveryPhotoUrl;

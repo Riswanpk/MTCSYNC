@@ -790,6 +790,43 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                           ),
                         ),
                       ],
+                      if (order.deliveryPhotoUrl != null &&
+                          order.deliveryPhotoUrl!.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        InkWell(
+                          onTap: () => _showImagePreviewDialog(
+                            order.deliveryPhotoUrl!,
+                            'Delivery Photo - ${order.shopName}',
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: primaryGreen.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: primaryGreen.withValues(alpha: 0.35)),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.photo_camera_rounded,
+                                    size: 17, color: primaryGreen),
+                                SizedBox(width: 8),
+                                Text(
+                                  'View Delivery Photo',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: primaryGreen,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ],
                 ),
@@ -1006,6 +1043,21 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                               ],
                             ),
                           ],
+                          if (order.discountAmount > 0) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Discount:',
+                                    style: TextStyle(fontSize: 13)),
+                                Text(
+                                  '- ₹${order.discountAmount.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                      fontSize: 13, color: Colors.redAccent),
+                                ),
+                              ],
+                            ),
+                          ],
                           const Divider(height: 16),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1082,6 +1134,36 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                                   ),
                                 ],
                               ),
+                              if (order.pickupCashAmount > 0 ||
+                                  order.pickupOnlineAmount > 0) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    if (order.pickupCashAmount > 0)
+                                      Text(
+                                        'Cash: ₹${order.pickupCashAmount.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: primaryGreen,
+                                        ),
+                                      ),
+                                    if (order.pickupCashAmount > 0 &&
+                                        order.pickupOnlineAmount > 0)
+                                      const SizedBox(width: 10),
+                                    if (order.pickupOnlineAmount > 0)
+                                      Text(
+                                        '${ExpoOrder.onlineLabelForMode(order.pickupPaymentMode ?? '')}: ₹${order.pickupOnlineAmount.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: primaryGreen,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
                             ],
                             const SizedBox(height: 6),
                             Row(
